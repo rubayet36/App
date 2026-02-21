@@ -25,6 +25,23 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "UsWidget",
+              "label": "Us Status Widget",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "description": "See your partner's status",
+              "previewImage": "./assets/icon.png"
+            }
+          ]
+        }
+      ]
+    ]
   }
 }
