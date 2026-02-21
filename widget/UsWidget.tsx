@@ -1,13 +1,23 @@
 import React from "react";
-import { FlexWidget, TextWidget } from "react-native-android-widget";
+import {
+  FlexWidget,
+  TextWidget,
+  ImageWidget,
+} from "react-native-android-widget";
 
 interface UsWidgetProps {
   partnerName: string;
   statusText: string;
   distance: string;
+  mapImageBase64?: string; // Add this to receive the map image
 }
 
-export function UsWidget({ partnerName, statusText, distance }: UsWidgetProps) {
+export function UsWidget({
+  partnerName,
+  statusText,
+  distance,
+  mapImageBase64,
+}: UsWidgetProps) {
   return (
     <FlexWidget
       style={{
@@ -27,7 +37,7 @@ export function UsWidget({ partnerName, statusText, distance }: UsWidgetProps) {
           fontSize: 18,
           fontFamily: "sans-serif-medium",
           color: "#ffffff",
-          marginBottom: 8,
+          marginBottom: 4,
         }}
       />
       <TextWidget
@@ -39,6 +49,16 @@ export function UsWidget({ partnerName, statusText, distance }: UsWidgetProps) {
           marginBottom: 8,
         }}
       />
+      {/* Show the static map image if available */}
+      {mapImageBase64 && (
+        <ImageWidget
+          image={mapImageBase64 as `data:image${string}`}
+          imageWidth={200}
+          imageHeight={100}
+          radius={12}
+          style={{ marginBottom: 8 }}
+        />
+      )}
       <TextWidget
         text={distance}
         style={{

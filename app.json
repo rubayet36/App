@@ -21,7 +21,8 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.Us"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -40,6 +41,16 @@
               "previewImage": "./assets/icon.png"
             }
           ]
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Us to use your location to show where you are to your partner.",
+          "locationAlwaysPermission": "Allow Us to track your location in the background so your partner always knows you are safe.",
+          "locationWhenInUsePermission": "Allow Us to use your location to show where you are.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ]
     ]

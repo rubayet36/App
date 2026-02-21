@@ -15,7 +15,7 @@ import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "../config/firebase";
 import { startBackgroundLocation } from "../services/locationService";
 import { useAuth } from "../context/AuthContext";
-import { Send, LogOut } from "lucide-react-native";
+import { Send, LogOut, LocateFixed } from "lucide-react-native";
 
 const { width, height } = Dimensions.get("window");
 
@@ -84,7 +84,9 @@ const mapHTML = (user: any) => `
     <div id="map"></div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const map = L.map('map', { zoomControl: false }).setView([51.505, -0.09], 13);
+        // Don't set initial view until we get our first coordinate
+        const map = L.map('map', { zoomControl: false });
+        let isMapInitialized = false;
         
         // CartoDB Dark Matter tiles
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -93,6 +95,7 @@ const mapHTML = (user: any) => `
             maxZoom: 20
         }).addTo(map);
 
+        // Wait for first data payload to create/update markers
         let userMarker, partnerMarker;
 
         // Custom icon builders
@@ -103,10 +106,6 @@ const mapHTML = (user: any) => `
             iconAnchor: [20, 20]
         });
 
-        // Initialize markers off-screen
-        userMarker = L.marker([0, 0], { icon: createIcon('${user?.name?.charAt(0) || "U"}') }).addTo(map);
-        partnerMarker = L.marker([0, 0], { icon: createIcon('${user?.name === "Rubayet" ? "R" : "R"}', true) }).addTo(map);
-
         // Listen for React Native messages
         document.addEventListener('message', function(event) {
             try {
@@ -114,19 +113,42 @@ const mapHTML = (user: any) => `
                 
                 if (data.type === 'USER_UPDATE' || data.type === 'LOCATION_UPDATE') {
                     const { lat, lng } = data.payload;
-                    userMarker.setLatLng([lat, lng]);
-                    map.setView([lat, lng], 15);
+                    
+                    if (!isMapInitialized) {
+                        map.setView([lat, lng], 15);
+                        isMapInitialized = true;
+                    }
+
+                    if (!userMarker) {
+                         userMarker = L.marker([lat, lng], { icon: createIcon('${user?.name?.charAt(0) || "U"}') }).addTo(map);
+                    } else {
+                         userMarker.setLatLng([lat, lng]);
+                    }
+                    // Only center if it's explicitly requested to avoid interrupting user panning
+                }
+                
+                if (data.type === 'CENTER_ON_USER') {
+                    const { lat, lng } = data.payload;
+                    map.flyTo([lat, lng], 15, { animate: true, duration: 1 });
                 }
                 
                 if (data.type === 'PARTNER_UPDATE') {
                     const { lat, lng, status } = data.payload;
-                    partnerMarker.setLatLng([lat, lng]);
-                    const bubble = document.getElementById('partner-status');
-                    if (status) {
-                        bubble.innerText = status;
-                        bubble.classList.add('visible');
+                    if (!partnerMarker) {
+                         partnerMarker = L.marker([lat, lng], { icon: createIcon('${user?.name === "Rubayet" ? "R" : "R"}', true) }).addTo(map);
                     } else {
-                        bubble.classList.remove('visible');
+                         partnerMarker.setLatLng([lat, lng]);
+                    }
+                    if (status) {
+                        // Ensure the bubble exists before trying to update it
+                        const bubble = document.getElementById('partner-status');
+                        if (bubble) {
+                            bubble.innerText = status;
+                            bubble.classList.add('visible');
+                        }
+                    } else {
+                        const bubble = document.getElementById('partner-status');
+                        if (bubble) bubble.classList.remove('visible');
                     }
                 }
                 
@@ -204,14 +226,21 @@ export default function MapScreen() {
             payload: { lat: loc.coords.latitude, lng: loc.coords.longitude },
           }),
         );
+        // Center the map initially
+        webViewRef.current.postMessage(
+          JSON.stringify({
+            type: "CENTER_ON_USER",
+            payload: { lat: loc.coords.latitude, lng: loc.coords.longitude },
+          }),
+        );
       }
 
       // Subscribe to updates
       Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.Balanced,
-          timeInterval: 5000,
-          distanceInterval: 10,
+          timeInterval: 15000,
+          distanceInterval: 30,
         },
         (newLoc) => {
           setLocation(newLoc);
@@ -256,14 +285,42 @@ export default function MapScreen() {
 
       // Update immediately on the UI for feedback
       if (webViewRef.current) {
+        // NOTE: we need to delay the UI update slightly to let the map render the marker first if it hasn't
+        setTimeout(() => {
+          webViewRef.current?.postMessage(
+            JSON.stringify({
+              type: "SET_USER_STATUS",
+              payload: statusText,
+            }),
+          );
+        }, 300);
+      }
+      setStatusText("");
+    }
+  };
+
+  const handleLocateMe = async () => {
+    if (location && webViewRef.current) {
+      webViewRef.current.postMessage(
+        JSON.stringify({
+          type: "CENTER_ON_USER",
+          payload: {
+            lat: location.coords.latitude,
+            lng: location.coords.longitude,
+          },
+        }),
+      );
+    } else {
+      let loc = await Location.getCurrentPositionAsync({});
+      setLocation(loc);
+      if (webViewRef.current) {
         webViewRef.current.postMessage(
           JSON.stringify({
-            type: "SET_USER_STATUS",
-            payload: statusText,
+            type: "CENTER_ON_USER",
+            payload: { lat: loc.coords.latitude, lng: loc.coords.longitude },
           }),
         );
       }
-      setStatusText("");
     }
   };
 
@@ -286,6 +343,11 @@ export default function MapScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Locate Me Button */}
+      <TouchableOpacity style={styles.locateButton} onPress={handleLocateMe}>
+        <LocateFixed color="#fff" size={24} />
+      </TouchableOpacity>
 
       {/* Heart-Beat Feature */}
       <KeyboardAvoidingView
@@ -383,5 +445,21 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  locateButton: {
+    position: "absolute",
+    right: 20,
+    bottom: Platform.OS === "ios" ? 120 : 100,
+    backgroundColor: "rgba(25, 25, 25, 0.75)",
+    padding: 12,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: "rgba(255, 182, 193, 0.3)",
+    zIndex: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });
